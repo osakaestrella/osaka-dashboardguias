@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Guías — Osaka Parts</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#D41217;--red-dark:#a30d11;--red-light:#fff0f0;
+  --black:#0d0d0d;--gray-dark:#1a1a1a;--gray-mid:#2e2e2e;
+  --gray-soft:#f7f5f3;--gray-line:#e8e4e0;
+  --text:#1a1a1a;--text-muted:#888;--text-light:#bbb;
+  --white:#ffffff;
+  --font-display:'Bebas Neue',sans-serif;
+  --font-body:'DM Sans',sans-serif;
+  --font-mono:'DM Mono',monospace;
+}
+body{font-family:var(--font-body);background:var(--gray-soft);color:var(--text);min-height:100vh}
+
+/* ── TOPBAR ── */
+#topbar{
+  background:var(--black);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:52px;position:sticky;top:0;z-index:200;
+  border-bottom:2px solid var(--red);
+}
+.brand{display:flex;align-items:center;gap:14px}
+.logo-badge{
+  background:var(--red);color:#fff;
+  font-family:var(--font-display);font-size:18px;letter-spacing:2px;
+  padding:4px 12px;border-radius:2px;
+}
+.brand-title{font-family:var(--font-display);font-size:16px;letter-spacing:3px;color:#fff;opacity:.85}
+.status-area{display:flex;align-items:center;gap:16px}
+#conn-dot{width:8px;height:8px;border-radius:50%;background:#444;display:inline-block;margin-right:5px;transition:background .3s}
+#conn-dot.ok{background:#22c55e}
+#conn-dot.error{background:var(--red)}
+#conn-dot.loading{background:#f59e0b;animation:blink .8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#conn-label{font-size:11px;color:#999;font-family:var(--font-mono)}
+#last-update{font-size:11px;color:#666;font-family:var(--font-mono)}
+#countdown-wrap{font-size:11px;color:#555;font-family:var(--font-mono);display:none}
+#countdown-wrap.show{display:inline}
+
+/* ── CONNECT PANEL ── */
+#connect-panel{
+  background:var(--black);
+  border-bottom:1px solid #222;
+  padding:14px 28px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+#connect-panel label{font-size:12px;color:#888;font-family:var(--font-mono);white-space:nowrap}
+#url-input{
+  flex:1;min-width:280px;
+  background:#1a1a1a;border:1px solid #333;border-radius:4px;
+  padding:8px 14px;font-size:13px;color:#fff;font-family:var(--font-mono);
+  outline:none;transition:border-color .2s;
+}
+#url-input:focus{border-color:var(--red)}
+#url-input::placeholder{color:#444}
+.btn-connect{
+  background:var(--red);color:#fff;border:none;border-radius:4px;
+  padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;
+  font-family:var(--font-body);transition:background .2s;white-space:nowrap;
+}
+.btn-connect:hover{background:var(--red-dark)}
+.btn-load{
+  background:#1a1a1a;color:#ccc;border:1px solid #333;border-radius:4px;
+  padding:8px 16px;font-size:13px;cursor:pointer;font-family:var(--font-body);
+  transition:all .2s;white-space:nowrap;
+}
+.btn-load:hover{background:#2a2a2a;color:#fff}
+.sep{font-size:12px;color:#444}
+#file-input{display:none}
+
+/* ── LAYOUT ── */
+.container{max-width:1440px;margin:0 auto;padding:24px 28px}
+
+/* ── KPI STRIP ── */
+#kpi-strip{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:2px;margin-bottom:24px;
+  border:1px solid var(--gray-line);border-radius:8px;overflow:hidden;
+}
+.kpi-card{
+  background:var(--white);padding:18px 20px;
+  border-right:1px solid var(--gray-line);
+  transition:background .15s;
+}
+.kpi-card:last-child{border-right:none}
+.kpi-label{font-size:10px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.kpi-value{font-family:var(--font-display);font-size:32px;letter-spacing:1px;color:var(--text);line-height:1}
+.kpi-value.accent{color:var(--red)}
+.kpi-sub{font-size:11px;color:var(--text-muted);margin-top:5px;font-family:var(--font-mono)}
+.kpi-bar{height:2px;background:#eee;margin-top:10px;border-radius:1px;overflow:hidden}
+.kpi-bar-fill{height:100%;background:var(--red);border-radius:1px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+/* ── FILTERS ── */
+#filter-row{
+  background:var(--white);border:1px solid var(--gray-line);
+  border-radius:8px;padding:14px 18px;
+  display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
+  margin-bottom:20px;
+}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
+.fg select,.fg input{
+  border:1px solid var(--gray-line);border-radius:4px;
+  padding:6px 10px;font-size:13px;background:var(--white);
+  color:var(--text);outline:none;min-width:130px;font-family:var(--font-body);
+}
+.fg select:focus,.fg input:focus{border-color:var(--red)}
+.btn-clear{
+  background:var(--gray-dark);color:#ccc;border:none;border-radius:4px;
+  padding:7px 16px;font-size:12px;cursor:pointer;font-family:var(--font-body);
+  transition:background .2s;align-self:flex-end;
+}
+.btn-clear:hover{background:#333;color:#fff}
+#pills{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.pill{
+  background:var(--red-light);color:var(--red-dark);
+  font-size:11px;padding:3px 10px;border-radius:20px;
+  display:flex;align-items:center;gap:6px;font-family:var(--font-mono);
+}
+.pill button{background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;line-height:1;padding:0}
+
+/* ── CHARTS ── */
+#charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.chart-card{background:var(--white);border:1px solid var(--gray-line);border-radius:8px;padding:18px 20px}
+.chart-card h3{
+  font-family:var(--font-display);font-size:13px;letter-spacing:2px;
+  color:var(--text-muted);text-transform:uppercase;margin-bottom:14px;
+}
+.chart-card canvas{max-height:200px}
+@media(max-width:680px){#charts{grid-template-columns:1fr}}
+
+/* ── TABLE ── */
+#table-wrap{background:var(--white);border:1px solid var(--gray-line);border-radius:8px;overflow:hidden}
+.tbl-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 18px;border-bottom:1px solid var(--gray-line);flex-wrap:wrap;gap:8px;
+}
+.tbl-header span{font-size:12px;color:var(--text-muted);font-family:var(--font-mono)}
+.btn-export{
+  background:var(--gray-dark);color:#ccc;border:none;border-radius:4px;
+  padding:6px 14px;font-size:11px;cursor:pointer;font-family:var(--font-mono);
+  font-weight:500;transition:background .2s;
+}
+.btn-export:hover{background:#333;color:#fff}
+.tbl-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{
+  background:var(--gray-dark);color:#ccc;
+  padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:11px;
+  white-space:nowrap;cursor:pointer;user-select:none;font-weight:500;
+  letter-spacing:.5px;
+}
+thead th:hover{background:#333;color:#fff}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--gray-line);white-space:nowrap;color:var(--text)}
+tbody tr:hover td{background:#faf9f8}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;font-family:var(--font-mono)}
+.b-ok{background:#dcfce7;color:#166534}
+.b-err{background:#fee2e2;color:#991b1b}
+.b-pen{background:#fef9c3;color:#854d0e}
+
+/* ── PAGINATION ── */
+#pagination{
+  display:flex;justify-content:center;align-items:center;
+  gap:6px;padding:14px;flex-wrap:wrap;
+  border-top:1px solid var(--gray-line);
+}
+.pg-btn{
+  border:1px solid var(--gray-line);background:var(--white);
+  border-radius:4px;padding:5px 12px;font-size:12px;cursor:pointer;
+  font-family:var(--font-mono);color:var(--text);transition:all .15s;
+}
+.pg-btn:hover{background:var(--red-light);border-color:var(--red);color:var(--red)}
+.pg-btn.active{background:var(--red);color:#fff;border-color:var(--red)}
+.pg-info{font-size:11px;color:var(--text-muted);font-family:var(--font-mono)}
+
+/* ── EMPTY STATE ── */
+#empty{
+  text-align:center;padding:80px 20px;display:none;
+}
+#empty .empty-icon{font-family:var(--font-display);font-size:72px;color:var(--gray-line);margin-bottom:12px}
+#empty p{font-size:15px;color:var(--text-muted);margin-bottom:6px}
+#empty small{font-size:12px;color:var(--text-light);font-family:var(--font-mono)}
+
+/* ── HELP BOX ── */
+#help-box{
+  background:#111;border:1px solid #2a2a2a;border-radius:8px;
+  padding:16px 20px;margin-bottom:20px;display:none;
+}
+#help-box.show{display:block}
+#help-box h4{font-size:12px;color:var(--red);font-family:var(--font-mono);margin-bottom:10px;letter-spacing:1px}
+#help-box p{font-size:12px;color:#888;line-height:1.7;font-family:var(--font-mono)}
+#help-box strong{color:#ccc}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">
+    <span class="logo-badge">OSAKA</span>
+    <span class="brand-title">Dashboard de Guías</span>
+  </div>
+  <div class="status-area">
+    <span><span id="conn-dot"></span><span id="conn-label">Sin datos</span></span>
+    <span id="last-update"></span>
+    <span id="countdown-wrap">· próx. actualización <span id="countdown">5:00</span></span>
+  </div>
+</div>
+
+<div id="connect-panel">
+  <label>Fuente Excel:</label>
+  <input id="url-input" type="text"
+    placeholder="Pega aquí la URL de SharePoint / OneDrive del archivo Excel…"
+    value="https://osakasass.sharepoint.com/:x:/r/sites/VISORDEARCHIVOS/_layouts/15/Doc.aspx?sourcedoc=%7BF897E8F7-31AC-4593-B440-822027596B12%7D&file=EJEMPLO%20GUIAS.xlsx" />
+  <button class="btn-connect" onclick="loadFromUrl()">Conectar</button>
+  <span class="sep">o</span>
+  <button class="btn-load" onclick="document.getElementById('file-input').click()">Cargar desde equipo</button>
+  <input id="file-input" type="file" accept=".xlsx,.xls" onchange="loadFromFile(event)">
+</div>
+
+<div class="container">
+
+  <div id="help-box">
+    <h4>⚠ No se pudo conectar automáticamente</h4>
+    <p>SharePoint bloquea descargas directas desde páginas externas (CORS).<br>
+    <strong>Solución rápida:</strong> descarga el Excel desde SharePoint → haz clic en "Cargar desde equipo".<br>
+    <strong>Solución permanente:</strong> comparte el Excel con enlace público de OneDrive (con permiso "Cualquier persona con el vínculo") y pega esa URL aquí.</p>
+  </div>
+
+  <div id="kpi-strip">
+    <div class="kpi-card"><div class="kpi-label">Total guías</div><div class="kpi-value" id="k-total">—</div><div class="kpi-sub">en selección</div></div>
+    <div class="kpi-card"><div class="kpi-label">Entregadas</div><div class="kpi-value accent" id="k-del">—</div><div class="kpi-sub" id="k-del-pct">—</div><div class="kpi-bar"><div class="kpi-bar-fill" id="k-del-bar" style="width:0"></div></div></div>
+    <div class="kpi-card"><div class="kpi-label">Devueltas / Incid.</div><div class="kpi-value" id="k-ret">—</div><div class="kpi-sub" id="k-ret-pct">—</div></div>
+    <div class="kpi-card"><div class="kpi-label">Días prom. tránsito</div><div class="kpi-value" id="k-days">—</div><div class="kpi-sub">días</div></div>
+    <div class="kpi-card"><div class="kpi-label">Flete total</div><div class="kpi-value" id="k-flete">—</div><div class="kpi-sub">COP</div></div>
+    <div class="kpi-card"><div class="kpi-label">Cajas enviadas</div><div class="kpi-value" id="k-cajas">—</div><div class="kpi-sub">unidades</div></div>
+  </div>
+
+  <div id="filter-row">
+    <div class="fg"><label>Buscar</label><input id="f-text" type="text" placeholder="Guía, pedido, destinatario…" oninput="applyFilters()"></div>
+    <div class="fg"><label>Estado</label><select id="f-estado" onchange="applyFilters()"><option value="">Todos</option></select></div>
+    <div class="fg"><label>Transportadora</label><select id="f-trans" onchange="applyFilters()"><option value="">Todas</option></select></div>
+    <div class="fg"><label>Departamento</label><select id="f-dpto" onchange="applyFilters()"><option value="">Todos</option></select></div>
+    <div class="fg"><label>Ciudad</label><select id="f-ciudad" onchange="applyFilters()"><option value="">Todas</option></select></div>
+    <button class="btn-clear" onclick="clearFilters()">Limpiar</button>
+    <div id="pills"></div>
+  </div>
+
+  <div id="charts">
+    <div class="chart-card"><h3>Envíos por transportadora</h3><canvas id="chart-trans"></canvas></div>
+    <div class="chart-card"><h3>Top departamentos destino</h3><canvas id="chart-dpto"></canvas></div>
+  </div>
+
+  <div id="table-wrap">
+    <div class="tbl-header">
+      <span id="tbl-count">—</span>
+      <button class="btn-export" onclick="exportCSV()">Exportar CSV</button>
+    </div>
+    <div id="empty">
+      <div class="empty-icon">OSAKA</div>
+      <p>Sin datos cargados</p>
+      <small>Conecta el Excel de SharePoint o cárgalo desde tu equipo</small>
+    </div>
+    <div class="tbl-scroll">
+      <table id="data-table">
+        <thead id="tbl-head"></thead>
+        <tbody id="tbl-body"></tbody>
+      </table>
+    </div>
+    <div id="pagination"></div>
+  </div>
+
+</div>
+
+<script>
+const PAGE_SIZE = 25;
+let allRows=[], filteredRows=[], columns=[];
+let sortCol=-1, sortAsc=true, currentPage=1;
+let sourceUrl='', countdownTimer=null, countdownSecs=300;
+let chartTrans=null, chartDpto=null;
+
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('osaka_excel_url') ||
+    document.getElementById('url-input').value;
+  if(saved){ document.getElementById('url-input').value=saved; loadFromUrl(); }
+  document.getElementById('empty').style.display='block';
+});
+
+function col(kw){ return columns.find(c=>kw.some(k=>c.toLowerCase().includes(k.toLowerCase())))||''; }
+
+async function loadFromUrl(){
+  const raw = document.getElementById('url-input').value.trim();
+  if(!raw) return;
+  sourceUrl = raw;
+  localStorage.setItem('osaka_excel_url', raw);
+  setStatus('loading','Conectando…');
+  document.getElementById('help-box').classList.remove('show');
+
+  const variants = [raw, raw+'&download=1', raw.replace('/:x:/r/','/:x:/r/').replace('Doc.aspx','download.aspx')];
+  let ok=false;
+  for(const url of variants){
+    try{
+      const r = await fetch(url,{mode:'cors'});
+      if(r.ok){ processBuffer(await r.arrayBuffer()); ok=true; break; }
+    }catch(e){}
+  }
+  if(!ok){ setStatus('error','CORS bloqueado'); document.getElementById('help-box').classList.add('show'); }
+  else startCountdown();
+}
+
+function loadFromFile(e){
+  const f=e.target.files[0]; if(!f) return;
+  setStatus('loading','Leyendo archivo…');
+  const r=new FileReader();
+  r.onload=ev=>processBuffer(ev.target.result);
+  r.readAsArrayBuffer(f);
+}
+
+function processBuffer(buf){
+  try{
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+    if(!raw.length){setStatus('error','Hoja vacía');return;}
+    columns=Object.keys(raw[0]);
+    allRows=raw;
+    populateFilters();
+    applyFilters();
+    setStatus('ok','Datos actualizados');
+    document.getElementById('last-update').textContent='· '+new Date().toLocaleTimeString('es-CO');
+    document.getElementById('empty').style.display='none';
+  }catch(e){setStatus('error','Error: '+e.message);}
+}
+
+function populateFilters(){
+  fillSel('f-estado',col(['estado','status']));
+  fillSel('f-trans',col(['transporta','carrier','operador']));
+  fillSel('f-dpto',col(['departamento','dept']));
+  fillSel('f-ciudad',col(['ciudad','city','destino']));
+  buildHead();
+}
+
+function fillSel(id,ck){
+  const s=document.getElementById(id);
+  const first=s.options[0]; s.innerHTML=''; s.appendChild(first);
+  if(!ck) return;
+  [...new Set(allRows.map(r=>String(r[ck])).filter(Boolean))].sort()
+    .forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;s.appendChild(o);});
+}
+
+function buildHead(){
+  document.getElementById('tbl-head').innerHTML='<tr>'+
+    columns.map((c,i)=>`<th onclick="sortBy(${i})">${c} <span style="opacity:.4">↕</span></th>`).join('')+'</tr>';
+}
+
+function applyFilters(){
+  const txt=document.getElementById('f-text').value.toLowerCase();
+  const est=document.getElementById('f-estado').value;
+  const tra=document.getElementById('f-trans').value;
+  const dpt=document.getElementById('f-dpto').value;
+  const ciu=document.getElementById('f-ciudad').value;
+  const cE=col(['estado','status']),cT=col(['transporta','carrier','operador']);
+  const cD=col(['departamento','dept']),cC=col(['ciudad','city','destino']);
+  filteredRows=allRows.filter(r=>{
+    if(txt&&!Object.values(r).some(v=>String(v).toLowerCase().includes(txt))) return false;
+    if(est&&String(r[cE])!==est) return false;
+    if(tra&&String(r[cT])!==tra) return false;
+    if(dpt&&String(r[cD])!==dpt) return false;
+    if(ciu&&String(r[cC])!==ciu) return false;
+    return true;
+  });
+  currentPage=1; renderKPIs(); renderCharts(); renderTable(); renderPills();
+}
+
+function clearFilters(){
+  ['f-text','f-estado','f-trans','f-dpto','f-ciudad'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.tagName==='INPUT'?el.value='':el.value='';
+  }); applyFilters();
+}
+
+function renderKPIs(){
+  const n=filteredRows.length;
+  document.getElementById('k-total').textContent=n.toLocaleString('es-CO');
+  const cE=col(['estado','status']);
+  const del=filteredRows.filter(r=>/entrega|deliver/i.test(String(r[cE]))).length;
+  const ret=filteredRows.filter(r=>/devuel|return|inciden/i.test(String(r[cE]))).length;
+  const pDel=n?(del/n*100).toFixed(1):0;
+  document.getElementById('k-del').textContent=del.toLocaleString('es-CO');
+  document.getElementById('k-del-pct').textContent=pDel+'% del total';
+  document.getElementById('k-del-bar').style.width=pDel+'%';
+  document.getElementById('k-ret').textContent=ret.toLocaleString('es-CO');
+  document.getElementById('k-ret-pct').textContent=n?(ret/n*100).toFixed(1)+'% del total':'—';
+  const cDy=col(['dias','días','tránsito','transito']);
+  if(cDy){
+    const days=filteredRows.map(r=>parseFloat(r[cDy])).filter(v=>!isNaN(v));
+    document.getElementById('k-days').textContent=days.length?(days.reduce((a,b)=>a+b,0)/days.length).toFixed(1):'—';
+  }
+  const cF=col(['flete','freight','costo','valor']);
+  if(cF){
+    const s=filteredRows.reduce((a,r)=>a+(parseFloat(r[cF])||0),0);
+    document.getElementById('k-flete').textContent=s>=1e6?(s/1e6).toFixed(1)+'M':s>=1e3?(s/1e3).toFixed(0)+'K':s.toFixed(0);
+  }
+  const cCj=col(['caja','box','bulto','paquete']);
+  document.getElementById('k-cajas').textContent=
+    cCj?filteredRows.reduce((a,r)=>a+(parseFloat(r[cCj])||0),0).toLocaleString('es-CO'):n.toLocaleString('es-CO');
+}
+
+function renderCharts(){
+  const cT=col(['transporta','carrier','operador']);
+  const cD=col(['departamento','dept']);
+  const tc={}, dc={};
+  if(cT) filteredRows.forEach(r=>{const v=String(r[cT]);tc[v]=(tc[v]||0)+1;});
+  if(cD) filteredRows.forEach(r=>{const v=String(r[cD]);dc[v]=(dc[v]||0)+1;});
+  const te=Object.entries(tc).sort((a,b)=>b[1]-a[1]);
+  const de=Object.entries(dc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(chartTrans) chartTrans.destroy();
+  chartTrans=new Chart(document.getElementById('chart-trans'),{
+    type:'bar',
+    data:{labels:te.map(e=>e[0]),datasets:[{data:te.map(e=>e[1]),backgroundColor:te.map((_,i)=>i===0?'#D41217':'#d1cdc9'),borderRadius:3}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ece8'}},x:{grid:{display:false}}},responsive:true,maintainAspectRatio:true}
+  });
+  if(chartDpto) chartDpto.destroy();
+  chartDpto=new Chart(document.getElementById('chart-dpto'),{
+    type:'bar',
+    data:{labels:de.map(e=>e[0]),datasets:[{data:de.map(e=>e[1]),backgroundColor:'#1a1a1a',borderRadius:3}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'#f0ece8'}},y:{grid:{display:false}}},responsive:true,maintainAspectRatio:true}
+  });
+}
+
+function renderTable(){
+  const total=filteredRows.length;
+  const pages=Math.ceil(total/PAGE_SIZE)||1;
+  const start=(currentPage-1)*PAGE_SIZE;
+  const slice=filteredRows.slice(start,start+PAGE_SIZE);
+  document.getElementById('tbl-count').textContent=
+    `${start+1}–${Math.min(start+PAGE_SIZE,total)} de ${total.toLocaleString('es-CO')} registros`;
+  const cE=col(['estado','status']);
+  document.getElementById('tbl-body').innerHTML=slice.map(r=>
+    '<tr>'+columns.map(c=>{
+      let v=r[c];
+      if(v instanceof Date) v=v.toLocaleDateString('es-CO');
+      v=v===undefined?'':String(v);
+      if(c===cE){
+        const cls=/entrega/i.test(v)?'b-ok':/devuel|inciden/i.test(v)?'b-err':'b-pen';
+        v=`<span class="badge ${cls}">${v}</span>`;
+      }
+      return `<td>${v}</td>`;
+    }).join('')+'</tr>'
+  ).join('');
+  let pg='';
+  if(pages>1){
+    if(currentPage>1) pg+=`<button class="pg-btn" onclick="goPage(${currentPage-1})">‹</button>`;
+    const s2=Math.max(1,currentPage-2),e2=Math.min(pages,currentPage+2);
+    if(s2>1) pg+=`<button class="pg-btn" onclick="goPage(1)">1</button>${s2>2?'<span class="pg-info">…</span>':''}`;
+    for(let p=s2;p<=e2;p++) pg+=`<button class="pg-btn${p===currentPage?' active':''}" onclick="goPage(${p})">${p}</button>`;
+    if(e2<pages) pg+=`${e2<pages-1?'<span class="pg-info">…</span>':''}<button class="pg-btn" onclick="goPage(${pages})">${pages}</button>`;
+    if(currentPage<pages) pg+=`<button class="pg-btn" onclick="goPage(${currentPage+1})">›</button>`;
+    pg+=`<span class="pg-info">Pág ${currentPage} / ${pages}</span>`;
+  }
+  document.getElementById('pagination').innerHTML=pg;
+}
+
+function goPage(p){currentPage=p;renderTable();}
+
+function sortBy(idx){
+  sortCol===idx?sortAsc=!sortAsc:(sortCol=idx,sortAsc=true);
+  const key=columns[idx];
+  filteredRows.sort((a,b)=>{
+    let va=a[key],vb=b[key];
+    if(!isNaN(parseFloat(va))&&!isNaN(parseFloat(vb))){va=parseFloat(va);vb=parseFloat(vb);}
+    else{va=String(va).toLowerCase();vb=String(vb).toLowerCase();}
+    return sortAsc?(va>vb?1:va<vb?-1:0):(va<vb?1:va>vb?-1:0);
+  });
+  currentPage=1;renderTable();
+}
+
+function renderPills(){
+  const active=[];
+  [{n:'estado',id:'f-estado'},{n:'transportadora',id:'f-trans'},{n:'dpto',id:'f-dpto'},{n:'ciudad',id:'f-ciudad'}]
+    .forEach(({n,id})=>{const v=document.getElementById(id).value;if(v)active.push({n,id,v});});
+  const t=document.getElementById('f-text').value;
+  if(t)active.push({n:'búsqueda',id:'f-text',v:t});
+  document.getElementById('pills').innerHTML=active.map(a=>
+    `<span class="pill">${a.v}<button onclick="clearPill('${a.id}')">×</button></span>`
+  ).join('');
+}
+
+function clearPill(id){
+  const el=document.getElementById(id);
+  el.tagName==='INPUT'?el.value='':el.value='';
+  applyFilters();
+}
+
+function exportCSV(){
+  if(!filteredRows.length) return;
+  const ws=XLSX.utils.json_to_sheet(filteredRows,{header:columns});
+  const csv=XLSX.utils.sheet_to_csv(ws);
+  const b=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');
+  a.href=u;a.download='guias_osaka_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();URL.revokeObjectURL(u);
+}
+
+function setStatus(state,label){
+  document.getElementById('conn-dot').className=state;
+  document.getElementById('conn-label').textContent=label;
+}
+
+function startCountdown(){
+  clearInterval(countdownTimer);
+  countdownSecs=300;
+  document.getElementById('countdown-wrap').classList.add('show');
+  countdownTimer=setInterval(()=>{
+    countdownSecs--;
+    if(countdownSecs<=0){countdownSecs=300;loadFromUrl();}
+    const m=Math.floor(countdownSecs/60),s=countdownSecs%60;
+    document.getElementById('countdown').textContent=m+':'+String(s).padStart(2,'0');
+  },1000);
+}
+</script>
+</body>
+</html>
